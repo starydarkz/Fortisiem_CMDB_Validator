@@ -22,11 +22,12 @@ pip3 install -r requeriments.txt
 ```
 
 ## Uso
-```bash
+```text
 python3 cmdb_validator
-IP FortiSIEM: Aqui escribes la IP del Supervisor Fortisiem
-Username FortiSIEM (ej: super/user): Aqui escribes el usuario y la organizacion, si no es multitenant siempre va super
-Password FortiSIEM: Aqui escribes la contraseña del usuario (esta estara oculta como en linux)
+IP FortiSIEM: Aqui escribes la IP del Supervisor Fortisiem.
+Username FortiSIEM (ej: super/user): Aqui escribes el usuario y la organizacion, si no es multitenant siempre va super.
+Password FortiSIEM: Aqui escribes la contraseña del usuario (esta estara oculta como en linux).
+LastEvent Max Hours: Cantidad en horas para realizar una busqueda de eventos de los equipos.
 ```
 
 
