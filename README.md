@@ -1,7 +1,7 @@
 # FortiSIEM CMDB Validator
 ![](https://github.com/starydarkz/fortisiem_cmdb-validator/blob/main/portada.png)
 
-Este programa tiene como objetivo extraer informacion de los equipos integrados en un FortiSIEM y extraer informacion como la ultima vez que enviaron eventos o no con el fin de proveer herramientas que el propio siem no posee a nivel de reporte.
+Este programa utiliza la API de FortiSIEM para extrare y analizar informacion sobre los equipos integrados en la CMDB.
 
 
 Actualmente es capaz de realizar las siguientes validaciones:
