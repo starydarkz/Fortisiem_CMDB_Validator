@@ -130,7 +130,7 @@ def select_query(input_time, ip):
     <Reports>
     <Report baseline="" rsSync="">
         <Name>Incident Notification Count</Name>
-        <Description> Total de Notificaciones con email alert especificado</Description>
+        <Description>ReportName</Description>
         <CustomerScope groupByEachCustomer="false">
         </CustomerScope>
         <SelectClause>
