@@ -11,15 +11,15 @@ Funciones de la herramienta:
 
 ## Instalacion
 1. Descargar repositorio desde la web o mediante git clone:
-```bash
+``` bash
 git clone https://github.com/starydarkz/fortisiem_cmdb-validator.git
 cd fortisiem_cmdb-validator
 pip3 install -r requeriments.txt
 ```
 
 ## Uso
-```bash
-_python3_ cmdb_validator
+``` bash
+python3 cmdb_validator
 ```
 - **IP FortiSIEM:** Dirección IP del Servidor FortiSIEM
 - **Username FortiSIEM (ej: super/user):** Usuario y la organizacion.
