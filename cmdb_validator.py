@@ -1,12 +1,11 @@
-""" Version: 1.0  | Created By: StaryDarkz  | Telegram: https://t.me/StaryDarkz """
+""" Created By: StaryDarkz  | Telegram: https://t.me/StaryDarkz """
+version = "v2.0"
 
-import sys,re, base64, urllib.request, urllib.parse, urllib.error, ssl
+import sys,re, base64, urllib.request, urllib.parse, urllib.error, ssl, time, json, httplib2, getpass
 from xml.dom.minidom import Node, parseString, parse
-import xml.etree.ElementTree as ET
 from colorama import Fore, init
 from os import listdir, system, popen, path
-import time, calendar, json, httplib2
-import getpass
+import xml.etree.ElementTree as ET
 
 
 #----Funciones Generales
@@ -53,17 +52,19 @@ def clearwindow():
     else:
         system("clear")
 
-#Variables de Configuracion
-clearwindow()
-print ("Login CMDB Validator:\n\n")
-ip_siem = input("IP FortiSIEM:\n-->")
-username = input("Username FortiSIEM (ej: super/user):\n-->")
-password =  getpass.getpass("Password FortiSIEM:\n-->")
-max_time = int(input("LastEvent Max Hours: \n-->"))
-clearwindow()
+def config():
+    #Variables de Configuracion
+    clearwindow()
+    print ("Login CMDB Validator:\n\n")
+    ip_siem = input("IP FortiSIEM:\n-->")
+    username = input("Username FortiSIEM (ej: super/user):\n-->")
+    password =  getpass.getpass("Password FortiSIEM:\n-->")
+    max_time = int(input("LastEvent Max Hours: \n-->"))
+    clearwindow()
+    return ip_siem, username, password, max_time
 
 #----Funciones de extraccion de CMDB
-def getCMDBInfo(appServer=ip_siem, user=username, password=password):
+def getCMDBInfo(appServer, user, password):
     base64_bytes = base64.encodebytes((user + ':' + password).encode())
     auth = 'Basic %s' % base64_bytes.decode()
 
@@ -83,7 +84,6 @@ def getCMDBInfo(appServer=ip_siem, user=username, password=password):
     except urllib.error.HTTPError as e:
         if (e.code != 204):
             print (e)
-
 
 
 #----FUnciones de extraccion de eventos
@@ -117,7 +117,7 @@ def dumpXML(xmlList):
             param.append(mapping)
     return param
 
-def select_query(input_time, ip):
+def select_query(input_time, ip, version=version):
 
     timestamp_now = int(time.time())
 
@@ -128,35 +128,32 @@ def select_query(input_time, ip):
 
     last_event = f"""<?xml version="1.0" encoding="UTF-8"?>
     <Reports>
-    <Report baseline="" rsSync="">
-        <Name>Incident Notification Count</Name>
-        <Description>ReportName</Description>
-        <CustomerScope groupByEachCustomer="false">
-        </CustomerScope>
-        <SelectClause>
-            <AttrList>extEventRecvProto,LAST(phRecvTime)</AttrList>
-        </SelectClause>
-        <OrderByClause>
-            <AttrList>COUNT(*) DESC</AttrList>
-        </OrderByClause>
-        <PatternClause window="3600">
-            <SubPattern id="1164394" name="Filter_OVERALL_STATUS">
-                <SingleEvtConstr>(reptDevIpAddr = {ip} AND eventType NOT CONTAIN "PH_")</SingleEvtConstr>
-                <GroupByAttr>extEventRecvProto</GroupByAttr>
-            </SubPattern>
-        </PatternClause>
-        <userRoles>
-            <roles custId="2001">1169250</roles>
-        </userRoles>
-        <SyncOrgs/><ReportInterval>
-            <Low>{time_start}</Low>
-            <High>{time_end}</High>error
-        </ReportInterval>
-        <TrendInterval>auto</TrendInterval>
-        <TimeZone/>
-    </Report>
-    </Reports>"""
-    
+        <Report baseline="" rsSync="">
+            <Name>FortiSIEM CMDB Validator {version}</Name>
+            <CustomerScope>
+                <Include all="true">
+                </Include>
+                <Exclude>
+                </Exclude>
+            </CustomerScope>
+            <SelectClause>
+                <AttrList>extEventRecvProto,LAST(phRecvTime)</AttrList>
+            </SelectClause>
+            <OrderByClause>
+                <AttrList>COUNT(*) DESC</AttrList>
+            </OrderByClause>
+            <PatternClause window="3600">
+                <SubPattern name="Filter">
+                    <SingleEvtConstr>(reptDevIpAddr = {ip} AND eventType NOT CONTAIN "PH_")</SingleEvtConstr>
+                    <GroupByAttr>extEventRecvProto</GroupByAttr>
+                </SubPattern>
+            </PatternClause>
+            <ReportInterval>
+                <Low>{time_start}</Low>
+                <High>{time_end}</High>
+            </ReportInterval>
+        </Report>
+</Reports>"""
     return last_event
 
 
@@ -184,6 +181,8 @@ def get_queryfromsiem(ip_siem, user, password, xml_query):
 
     resp, content = h.request(urlfirst, "POST", t2, header)
     queryId = content.decode("utf-8")
+    # print (t2)
+    # print (queryId)
     if "xml version" in queryId:
         queryId = extrat_data_query(queryId)
         
@@ -249,7 +248,7 @@ def get_queryfromsiem(ip_siem, user, password, xml_query):
 
 
 
-def getLastEvent(ip, max_time = max_time):
+def getLastEvent(ip, max_time):
     resultado = ""
     for element in range(1,max_time+1):
         data = get_queryfromsiem(ip_siem, username, password, select_query(element,ip))
@@ -301,12 +300,12 @@ def menu():
                                                                                                        
 
 
-def main():
+def main(ip_siem, username, password, max_time):
     
     input_user = menu()
 
 
-    data_fortisiem = getCMDBInfo()
+    data_fortisiem = getCMDBInfo(ip_siem, username, password)
     cmdb = parse_xml(data_fortisiem)
     num_cmdb = len(cmdb)
     count = 0
@@ -322,7 +321,7 @@ def main():
             
             if element_cliente in cmdb:
 
-                last_event = getLastEvent(element_cliente)
+                last_event = getLastEvent(element_cliente,  max_time = max_time)
                 resultado = resultado + (f"{element_cliente},{cmdb[element_cliente][0]},{cmdb[element_cliente][1]},{last_event}\n")
 
             else:
@@ -336,7 +335,7 @@ def main():
             clearwindow()
             print ("[SELECCIONADO] | Extraer equipos que no envian eventos\n\nAnalizando equipos...")
             print (f"Status: {count}/{num_cmdb}")
-            last_event = getLastEvent(element)
+            last_event = getLastEvent(element,  max_time = max_time)
             if last_event == "N\A":
                 resultado = resultado + (f"{element},{cmdb[element][0]},{last_event}\n")
     
@@ -348,8 +347,8 @@ def main():
             clearwindow()
             print ("[SELECCIONADO] | Extraer toda la CMDB y la ultima vez que enviaron\n\nAnalizando equipos...")
             print (f"Status: {count}/{num_cmdb}")
-            last_event = getLastEvent(element)
+            last_event = getLastEvent(element,  max_time = max_time)
             resultado = resultado + (f"{element},{cmdb[element][0]},{last_event}\n")
     save_results (resultado)
-
-main()
+ip_siem, username, password, max_time= config()
+main(ip_siem, username, password, max_time)
