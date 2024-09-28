@@ -1,5 +1,5 @@
 # FortiSIEM CMDB Validator
-![](https://github.com/starydarkz/fortisiem_cmdb-validator/blob/main/portada.png)
+![](https://github.com/starydarkz/fortisiem_cmdb_validator/blob/main/portada.png)
 
 Este programa utiliza la API de FortiSIEM para extrare y analizar informacion sobre los equipos integrados en la CMDB.
 
@@ -12,14 +12,14 @@ Funciones de la herramienta:
 ## Instalacion
 1. Descargar repositorio desde la web o mediante git clone:
 ``` bash
-git clone https://github.com/starydarkz/fortisiem_cmdb-validator.git
-cd fortisiem_cmdb-validator
+git clone https://github.com/starydarkz/fortisiem_cmdb_validator.git
+cd fortisiem_cmdb_validator
 pip3 install -r requeriments.txt
 ```
 
 ## Uso
 ``` bash
-python3 cmdb_validator
+python3 cmdb_validator.py
 ```
 - **IP FortiSIEM:** Dirección IP del Servidor FortiSIEM
 - **Username FortiSIEM (ej: super/user):** Usuario y la organizacion.
