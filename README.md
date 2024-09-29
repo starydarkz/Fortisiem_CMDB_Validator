@@ -17,6 +17,7 @@ cd fortisiem_cmdb_validator
 pip3 install -r requeriments.txt
 ```
 
+Ultima version FortiSIEM testeada: v7.1
 ## Uso
 ``` bash
 python3 cmdb_validator.py
