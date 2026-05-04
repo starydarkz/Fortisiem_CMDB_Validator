@@ -20,7 +20,7 @@ pip3 install -r requeriments.txt
 
 ## Uso
 ``` bash
-python3 cmdb_validator.py
+python3 fsmcmdbval.py [options]
 ```
 
 ``` bash
