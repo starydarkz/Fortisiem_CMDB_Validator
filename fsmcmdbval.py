@@ -1,5 +1,5 @@
-import sys,re, base64, urllib.request, urllib.parse, urllib.error, ssl, time, httplib2
-from xml.dom.minidom import Node, parseString, parse
+import re, base64, urllib.request, urllib.error, ssl, time, httplib2
+from xml.dom.minidom import Node, parseString
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from openpyxl import Workbook
@@ -28,17 +28,11 @@ def parse_xml(xml_data):
 
     cmdb = {}
 
-    # limit = 100
-
     try:
         # Parsear el XML
         root = ET.fromstring(xml_data)
 
-
         for device in root.findall(".//device"):
-            # limit -= 1
-            # if limit == 0:
-            #     return cmdb
             #print (device.text)
             device_ip = device.find("accessIp").text
             device_name = device.find("name").text
@@ -132,7 +126,8 @@ def _normalize(ip, val):
 
 def _fmt(value):
     if isinstance(value, list):
-        return ", ".join(value) if value else "Sin tipo"
+        # Retornar con saltos de línea para mejor visualización en Excel
+        return "\n".join(value) if value else "Sin tipo"
     return str(value)
 
 
@@ -237,6 +232,10 @@ def _detail(wb, time_range, rows):
         is_sending = row[4] == "Enviando Logs"
         row_fill   = _fill("E8F5E9") if is_sending else (_fill(C_ROW_A) if r_idx % 2 == 0 else _fill(C_ROW_B))
 
+        # Calcular altura basada en número de líneas en event_types (columna 6)
+        num_lines = max(1, row[5].count("\n") + 1, row[6].count("\n") + 1)
+        row_height = max(18, num_lines * 15 + 5)
+
         for c_idx, val in enumerate(row, start=1):
             cell           = ws.cell(r_idx, c_idx, val)
             cell.fill      = row_fill
@@ -252,7 +251,7 @@ def _detail(wb, time_range, rows):
             elif c_idx == 3:
                 cell.alignment = _align("center")
 
-        ws.row_dimensions[r_idx].height = 18
+        ws.row_dimensions[r_idx].height = row_height
    
     for col_idx, col_cells in enumerate(ws.iter_cols(min_row=2, max_row=len(rows) +2), start=1):
             max_len = max((len(str(cell.value or "")) for cell in col_cells), default=10)
@@ -359,7 +358,7 @@ def generate_report(events_data: dict, cmdb_data: dict, time_range: str,
     output_path : str
         Ruta donde se guarda el .xlsx. Por defecto: "fortisiem_cmdb_report.xlsx"
     """
-
+    
     events_flat = {}
     for d in events_data:
         events_flat.update(d)
@@ -384,7 +383,7 @@ def generate_report(events_data: dict, cmdb_data: dict, time_range: str,
     _stats(wb, time_range, rows)
 
     wb.save(output_path)
-    print(f"[✓] Reporte generado: {output_path}  ({len(rows)} dispositivos)")
+    print(f"[OK] Reporte generado: {output_path}  ({len(rows)} dispositivos)")
 
 #----FUnciones de extraccion de eventos
 def extrat_data_status(xml_string):
@@ -402,19 +401,19 @@ def dumpXML(xmlList):
     param = []
     for xml in xmlList:
         doc = parseString(xml.encode('ascii', 'xmlcharrefreplace'))
-    for node in doc.getElementsByTagName("events"):
-        for node1 in node.getElementsByTagName("event"):
-            mapping = {}
-            for node2 in node1.getElementsByTagName("attributes"):
-                for node3 in node2.getElementsByTagName("attribute"):
-                    itemName = node3.getAttribute("name")
-                    for node4 in node3.childNodes:
-                        if node4.nodeType == Node.TEXT_NODE:
-                            message = node4.data
-                            if '\\n' in message:
-                                message = message.replace('\\n', '')
-                            mapping[itemName] = message
-            param.append(mapping)
+        for node in doc.getElementsByTagName("events"):
+            for node1 in node.getElementsByTagName("event"):
+                mapping = {}
+                for node2 in node1.getElementsByTagName("attributes"):
+                    for node3 in node2.getElementsByTagName("attribute"):
+                        itemName = node3.getAttribute("name")
+                        for node4 in node3.childNodes:
+                            if node4.nodeType == Node.TEXT_NODE:
+                                message = node4.data
+                                if '\\n' in message:
+                                    message = message.replace('\\n', '')
+                                mapping[itemName] = message
+                param.append(mapping)
     return param
 
 def select_query(input_time, ip_device):
@@ -427,32 +426,23 @@ def select_query(input_time, ip_device):
     time_end = timestamp_now - custom_time + 3600
 
     last_event = f"""<?xml version="1.0" encoding="UTF-8"?>
-    <Reports>
-        <Report baseline="" rsSync="">
-            <Name>FortiSIEM CMDB Validator</Name>
-            <CustomerScope>
-                <Include all="true">
-                </Include>
-                <Exclude>
-                </Exclude>
-            </CustomerScope>
-            <SelectClause>
-                <AttrList>extEventRecvProto,eventType,COUNT(phRecvTime)</AttrList>
-            </SelectClause>
-            <OrderByClause>
-                <AttrList>COUNT(*) DESC</AttrList>
-            </OrderByClause>
-            <PatternClause window="3600">
-                <SubPattern name="Filter">
-                    <SingleEvtConstr>(reptDevIpAddr = {ip_device} AND eventType NOT CONTAIN "PH_")</SingleEvtConstr>
-                    <GroupByAttr>eventType,extEventRecvProto</GroupByAttr>
-                </SubPattern>
-            </PatternClause>
-            <ReportInterval>
-                <Low>{time_start}</Low>
-                <High>{time_end}</High>
-            </ReportInterval>
-        </Report>
+<Reports>
+    <Report baseline="" rsSync="">
+        <Name>FortiSIEM CMDB Validator</Name>
+        <SelectClause>
+            <AttrList>extEventRecvProto,eventType,COUNT(phRecvTime)</AttrList>
+        </SelectClause>
+        <PatternClause window="3600">
+            <SubPattern name="Filter">
+                <SingleEvtConstr>(reptDevIpAddr = {ip_device} AND eventType NOT CONTAIN "PH_")</SingleEvtConstr>
+                <GroupByAttr>eventType,extEventRecvProto</GroupByAttr>
+            </SubPattern>
+        </PatternClause>
+        <ReportInterval>
+            <Low>{time_start}</Low>
+            <High>{time_end}</High>
+        </ReportInterval>
+    </Report>
 </Reports>"""
     return last_event
 
@@ -469,23 +459,10 @@ def get_queryfromsiem(ip_siem, user, password, input_time,ip_device):
     h.add_credentials(user, password)
     
     header = {'Content-Type': 'text/xml'}
-    
-    doc = parseString(xml_query)
-    t = doc.toxml()
 
-    if '<DataRequest' in t:
-        t1 = t.replace("<DataRequest", "<Reports><Report")
-    else:
-        t1 = t
-    if '</DataRequest>' in t1:
-        t2 = t1.replace("</DataRequest>", "</Report></Reports>")
-    else:
-        t2 = t1
-
-    resp, content = h.request(urlfirst, "POST", t2, header)
+    resp, content = h.request(urlfirst, "POST", xml_query, header)
     queryId = content.decode("utf-8")
-    # print (t2)
-    # print (queryId)
+    
     if "xml version" in queryId:
         queryId = extrat_data_query(queryId)
         
@@ -528,8 +505,7 @@ def get_queryfromsiem(ip_siem, user, password, input_time,ip_device):
     p = re.compile('totalCount="\\d+"')
     mlist = p.findall(content.decode())
     
-    
-    if mlist[0] != '':
+    if mlist and mlist[0] != '':
         mm = mlist[0].replace('"', '')
         m = mm.split("=")[-1]
         num = 0
@@ -544,10 +520,14 @@ def get_queryfromsiem(ip_siem, user, password, input_time,ip_device):
                 if content != '':
                     outXML.append(content.decode("utf-8"))
     else:
-        print ("no info in this report.")
-        return "Error"
+        # Sin información de eventos
+        return {ip_device: {"events": False, "event_types": "No logs", "event_protocol": "No logs"}}
+    
     data = dumpXML(outXML)
-
+    
+    if not data:
+        # Si dumpXML retorna lista vacia
+        return {ip_device: {"events": False, "event_types": "No logs", "event_protocol": "No logs"}}
 
     result= detect_eventtypes(data,ip_device)
     return result
@@ -559,7 +539,7 @@ EVENT_TYPE_PATTERNS = {
     "win-security"        : "Windows Security Events",
     "win-sysmon"          : "Windows Sysmon Events",
     "win-system"          : "Windows System Events",
-    "win-application"     : "Windows Application Events Events",
+    "win-app"              : "Windows Application Events Events",
     "win-powershell"      : "Windows PowerShell Events",
     "win-wmi"             : "Windows WMI Activity Events",
     "win-dns"             : "Windows DNS Server Events",
@@ -574,27 +554,30 @@ EVENT_TYPE_PATTERNS = {
     "win-remotedesktop"   : "Windows Remote Desktop Events",
 
     # ── Linux / Unix ──────────────────────────────────────
-    "linux-auth"          : "Linux Authentication Events",
-    "linux-syslog"        : "Linux Syslog Events",
-    "linux-audit"         : "Linux Audit (auditd) Events",
-    "linux-cron"          : "Linux Cron Jobs Events",
-    "linux-kernel"        : "Linux Kernel Events",
-    "linux-sudo"          : "Linux Sudo Activity Events",
-    "linux-ssh"           : "Linux SSH Activity Events",
+    "generic_unix_"    : "Linux Activity Events",
+
+
+    "generic_unix_cron"    : "Linux CRON Activity Events",
     "linux-rpm"           : "Linux Package Management Events",
     "linux-apt"           : "Linux Package Management Events",
 
     # ── Fortinet ──────────────────────────────────────────
-    "fortigate-traffic"    : "Fortinet Firewall Traffic Events",
-    "fortinet-utm"        :  "Fortinet UTM Events",
-    "fortinet-vpn"        : "Fortinet VPN Events",
-    "fortigate-ips"        : "Fortinet IPS/IDS Events",
-    "fortigate-antivirus"  : "Fortinet Antivirus Events",
-    "fortigate-webfilter"  : "Fortinet Web Filter Events",
-    "fortigate-appctrl"    : "Fortinet Application Control Events",
-    "fortigate-system"     : "Fortinet System Events",
-    "fortigate-auth"       : "Fortinet Authentication Events",
-    "fortigate-ha"         : "Fortinet High Availability Events",
+    "fortigate-traffic"    : "FortiGate Firewall Traffic Events",
+    "fortigate-utm"        :  "FortiGate UTM Events",
+    "fortigate-voip"       :  "FortiGate VOIP Events",
+    "fortigate-vpn"        : "FortiGate VPN Events",
+    "fortigate-ipsec"      : "FortiGate IPSEC Events",
+    "fortigate-ips"        : "FortiGate IPS/IDS Events",
+    "fortigate-antivirus"  : "FortiGate Antivirus Events",
+    "fortigate-webfilter"  : "FortiGate Web Filter Events",
+    "fortigate-appctrl"    : "FortiGate Application Control Events",
+    "fortigate-system"     : "FortiGate System Events",
+    "fortigate-wireless"   : "FortiGate Wireless Events",
+    "fortigate-generic"    : "FortiGate Generic Events",
+    "fortigate-event-dns"  : "FortiGate DNS Events",
+    "fortigate-event-admin"  : "FortiGate Administrative Events",
+    "fortigate-auth"       : "FortiGate Authentication Events",
+    "fortigate-ha"         : "FortiGate High Availability Events",
     "faz"                 : "FortiAnalyzer Events",
     "fmg"                 : "FortiManager Events",
     "fortiedr"            : "FortiEDR Events",
@@ -609,14 +592,14 @@ EVENT_TYPE_PATTERNS = {
     "fortideceptor-scada-alert"  : "FortiDeceptor Scada Events Alerts",
 
     # ── Palo Alto ─────────────────────────────────────────
-    "panos-traffic"       : "Palo Alto Firewall Traffic Events",
-    "panos-threat"        : "Palo Alto Threat Events",
-    "panos-system"        : "Palo Alto System Events",
-    "panos-config"        : "Palo Alto Config Changes Events",
-    "panos-auth"          : "Palo Alto Authentication Events",
-    "panos-vpn"           : "Palo Alto GlobalProtect VPN Events",
-    "panos-wildfire"      : "Palo Alto WildFire Sandbox Events",
-    "panos-url"           : "Palo Alto URL Filtering Events",
+    "pan-os-traffic"       : "Palo Alto Firewall Traffic Events",
+    "pan-os-threat"        : "Palo Alto Threat Events",
+    "pan-os-system"        : "Palo Alto System Events",
+    "pan-os-config"        : "Palo Alto Config Changes Events",
+    "pan-os-auth"          : "Palo Alto Authentication Events",
+    "pan-os-vpn"           : "Palo Alto GlobalProtect VPN Events",
+    "pan-os-wildfire"      : "Palo Alto WildFire Sandbox Events",
+    "pan-os-url"           : "Palo Alto URL Filtering Events",
 
     # ── Cisco ─────────────────────────────────────────────
     "cisco-asa"           : "Cisco ASA Firewall Events",
@@ -632,13 +615,13 @@ EVENT_TYPE_PATTERNS = {
 
     # ── Microsoft Cloud / Active Directory ───────────────
     "msad"                : "Microsoft Active Directory Events",
-    "mso365"              : "Microsoft 365 Audit Events",
+    "ms_office365_"              : "Microsoft 365 Audit Events",
     "msazure"             : "Microsoft Azure Activity Events",
     "msentra"             : "Microsoft Entra ID (AAD) Events",
     "msexchange"          : "Microsoft Exchange Events",
     "msteams"             : "Microsoft Teams Events",
     "msdefender"          : "Microsoft Defender for Endpoint Events",
-    "mssql"               : "Microsoft SQL Server Events",
+    "mssql_"               : "Microsoft SQL Server Events",
     "mssharepoint"        : "Microsoft SharePoint Events",
 
     # ── AWS ──────────────────────────────────────────────
@@ -673,6 +656,8 @@ EVENT_TYPE_PATTERNS = {
     "cybereason"          : "Cybereason EDR",
     "symantec-edr"        : "Symantec EDR",
     "trendmicro"          : "Trend Micro",
+    "emailsecurity-tracking-log" : "TrendMicro Email Tracking Log",
+    "trend_vision_one"    : "Trend Micro Vision One",
     "mcafee"              : "McAfee / Trellix",
     "tenable"             : "Tenable / Nessus Vulnerability",
     "qualys"              : "Qualys Vulnerability",
@@ -685,7 +670,7 @@ EVENT_TYPE_PATTERNS = {
     "dragos"              : "Dragos OT Security",
 
     # ── Aplicaciones / Web ────────────────────────────────
-    "apache"              : "Apache Web Server",
+    "apache-web"              : "Apache Web Server",
     "nginx"               : "Nginx Web Server",
     "iis"                 : "IIS Web Server",
     "tomcat"              : "Apache Tomcat",
@@ -694,7 +679,7 @@ EVENT_TYPE_PATTERNS = {
     "akamai"              : "Akamai WAF/CDN",
 
     # ── Bases de datos ────────────────────────────────────
-    "oracle-db"           : "Oracle Database",
+    "oradb_"           : "Oracle Database",
     "mysql"               : "MySQL / MariaDB",
     "postgresql"          : "PostgreSQL",
     "mongodb"             : "MongoDB",
@@ -720,6 +705,12 @@ EVENT_TYPE_PATTERNS = {
     "modbus"              : "Modbus Protocol",
     "dnp3"                : "DNP3 Protocol",
     "s7"                  : "Siemens S7 PLC",
+
+    # ── Cloud Events ─────────────────────────────────────────
+    "cloudflare_"          : "Cloudflare Events",
+
+    # ── FortiSIEM Events ─────────────────────────────────────────
+    "PH_D" : "FortiSIEM Performance Events"
 
 }
 
@@ -749,12 +740,11 @@ def classify_device_events(event_types: list) -> list:
 
 def detect_eventtypes(data,ip_device):
 
-
     filter_detected = []
     protocol_detected = []
 
     if len(data) == 0:  #Sin eventos    
-        return {"events":False, "event_types":"No logs","event_protocol": "No logs" }
+        return {ip_device: {"events":False, "event_types":"No logs","event_protocol": "No logs" }}
     else:
 
         event_types = []
@@ -769,65 +759,153 @@ def detect_eventtypes(data,ip_device):
                 if element["extEventRecvProto"] not in protocol_detected:
                     protocol_detected.append(element["extEventRecvProto"])
 
-
         categories = classify_device_events(event_types)
         return {ip_device:{"events":True, "event_types":categories, "event_protocol":protocol_detected}}
-        
+
+
+def parse_ip_input(input_data):
+    """
+    Parsea el input de IPs que puede ser:
+    - Lista de IPs separadas por coma: "192.168.1.1,192.168.1.2"
+    - Ruta a archivo CSV con IPs separadas por coma
+    - Ruta a archivo TXT con IPs (una por línea o separadas por coma)
+    Retorna una lista de IPs únicas
+    """
+    import os
+    
+    ips = set()
+    
+    # Verificar si es una ruta a archivo
+    if os.path.isfile(input_data):
+        try:
+            with open(input_data, 'r') as f:
+                content = f.read()
+                # Dividir por comas y saltos de línea
+                parts = content.replace('\n', ',').split(',')
+                for part in parts:
+                    ip = part.strip()
+                    if ip:  # Solo agregar si no está vacío
+                        ips.add(ip)
+        except Exception as e:
+            print(f"Error leyendo archivo {input_data}: {e}")
+            return []
+    else:
+        # Tratar como lista de IPs separadas por coma
+        parts = input_data.split(',')
+        for part in parts:
+            ip = part.strip()
+            if ip:
+                ips.add(ip)
+    
+    return sorted(list(ips))
+
 
 def main():
     from concurrent.futures import ProcessPoolExecutor, as_completed
     
     #Comandos de configuracion
     parser = argparse.ArgumentParser(description="Options")
-    parser.add_argument("-u", "--user", help="Set User account")
-    parser.add_argument("-p", "--passw", help="Set Password account")
+    parser.add_argument("-u", "--user", help="Set User account (example: -u super/user1)")
+    parser.add_argument("-p", "--passw", help='Set Password account (example: -p "@SuperPass" )')
     parser.add_argument("-s","--siem", help="Set IP FortiSiEM Supervisor IP")
-    parser.add_argument("-o", "--output", help="Set output file path")
-    parser.add_argument("-t", "--time", help="Set time range logs")
+    parser.add_argument("-o", "--output", default="./fortisiem_report_devices.xlsx", help="[Optional] Set output file path. Default=./fortisiem_report_devices.xlsx")
+    parser.add_argument("-t", "--time", default=1, type=int, help="[Optional] Set time range logs (hours). Default=1")
 
     #Comandos de funciones
     parser.add_argument("-xall", "--extractall", action="store_true", help="Extraer la CMDB y toda la informacion relacionadas")
-    parser.add_argument("-xnologs", "--extractnologs", action="store_true", help="Extraer solo los que no envian eventos")
+    parser.add_argument("-i", "--input", help="[Optional] IPs a validar: lista separada por coma, archivo CSV o TXT (ej: '192.168.1.1,192.168.1.2' o 'ips.txt')")
  
     args = parser.parse_args()
     ip_siem = args.siem
     username = args.user
     password = args.passw
 
+    # Step 1: Extraer listado de equipos en la CMDB
+    apiquery = getCMDBInfo(ip_siem, username, password)
+    cmdb = parse_xml(apiquery)
+
+    if None in cmdb:
+        del cmdb[None]
+
+    resultados = []
+    
+    from tqdm import tqdm
+    from functools import partial
+
     if args.extractall:  #Extraer info de toda la CMDB
 
-        resultados = []
-        
-        from tqdm import tqdm
-
-        # Step 1: Extraer listado de equipos en la CMDB
-        apiquery = getCMDBInfo(ip_siem, username, password)
-        cmdb = parse_xml(apiquery)
-
-        if None in cmdb:
-            del cmdb[None]
-
         total_device = len(cmdb)
-
-        print (f"TOTAL DE EQUIPOS: {total_device}")
+        print (f"TOTAL DE EQUIPOS: {total_device}\n")
         
-        # Step 2: Validar envio de eventos al SIEM
-        from functools import partial
-
-        #get_queryfromsiem(ip_siem, username, password, select_query(input_time,ip_device))
-        func = partial(get_queryfromsiem,ip_siem, username, password, int(args.time)
-                        )
+        # Step 2: Validar envio de eventos al SIEM para todas las IPs
+        func = partial(get_queryfromsiem, ip_siem, username, password, args.time)
 
         with ProcessPoolExecutor(max_workers=8) as executor:
-
-            device_analyzed = dict(
-                zip (cmdb.keys(), tqdm( executor.map(func, cmdb.keys()),total=total_device))
-                                )
+            results = list(tqdm(executor.map(func, cmdb.keys()), total=total_device))
+            # Desanidar los resultados (get_queryfromsiem retorna {ip: {eventos}})
+            device_analyzed = {}
+            for ip, result in zip(cmdb.keys(), results):
+                if isinstance(result, dict) and ip in result:
+                    device_analyzed[ip] = result[ip]  # Extraer el valor anidado
+                elif isinstance(result, dict):
+                    device_analyzed[ip] = result  # Si no está anidado, usar como está
+                else:
+                    device_analyzed[ip] = {"events": False, "event_types": "Error", "event_protocol": "N/A"}
             resultados.append(device_analyzed)
+            
+    elif args.input:  #Validar IPs especificadas en el input
+        
+        # Parsear las IPs del input
+        input_ips = parse_ip_input(args.input)
+        
+        if not input_ips:
+            print("[ERROR] No se encontraron IPs válidas en el input")
+            return
+        
+        print(f"IPs a validar: {len(input_ips)}\n")
+        
+        # Crear diccionario de CMDB filtrado y agregar IPs no integradas
+        filtered_cmdb = {}
+        device_analyzed = {}
+        
+        for ip in input_ips:
+            if ip in cmdb:
+                filtered_cmdb[ip] = cmdb[ip]
+            else:
+                # IP no está en la CMDB - marcar como no integrada
+                filtered_cmdb[ip] = ["N/A (No integrado en CMDB)", "false", "N/A"]
+        
+        # Validar envío de eventos para IPs integradas en CMDB (flujo normal)
+        ips_to_validate = [ip for ip in input_ips if ip in cmdb]
+        
+        if ips_to_validate:
+            func = partial(get_queryfromsiem, ip_siem, username, password, args.time)
+            with ProcessPoolExecutor(max_workers=8) as executor:
+                results = list(tqdm(executor.map(func, ips_to_validate), total=len(ips_to_validate)))
+                # Desanidar los resultados (get_queryfromsiem retorna {ip: {eventos}})
+                for ip, result in zip(ips_to_validate, results):
+                    if isinstance(result, dict) and ip in result:
+                        device_analyzed[ip] = result[ip]  # Extraer el valor anidado
+                    elif isinstance(result, dict):
+                        device_analyzed[ip] = result  # Si no está anidado, usar como está
+                    else:
+                        device_analyzed[ip] = {"events": False, "event_types": "Error", "event_protocol": "N/A"}
+        
+        # Para IPs no integradas o no aprobadas, marcar como "No Logs"
+        for ip in input_ips:
+            if ip not in device_analyzed:
+                device_analyzed[ip] = {"events": False, "event_types": "No integrado", "event_protocol": "N/A"}
+        
+        resultados.append(device_analyzed)
+        cmdb = filtered_cmdb
+    
+    else:
+        print("[ERROR] Debes usar -xall para extraer toda la CMDB o -i/--input para validar IPs específicas")
+        return
     
     # Generate Excel Report
-
-    generate_report(events_data=resultados, cmdb_data=cmdb, time_range=f"Ultimos {args.time} minutos", output_path=args.output)
+    generate_report(events_data=resultados, cmdb_data=cmdb, time_range=f"Últimos {args.time} hora(s)", output_path=args.output)
 
 if __name__ == "__main__":
+
     main()
